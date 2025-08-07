@@ -149,7 +149,7 @@ def plot_results(data, ticker):
     """
     Generates and saves a comprehensive multi-subplot visualization of the analysis.
     """
-    # Create `addplot` objects for the indicators to be added to the main chart
+    # Plot the candlestick chart with indicators
     apds = [
         mpf.make_addplot(data['20-Day SMA'], color='orange', panel=0),
         mpf.make_addplot(data['50-Day SMA'], color='red', panel=0),
@@ -160,7 +160,6 @@ def plot_results(data, ticker):
         mpf.make_addplot(data['MACD Signal'], color='red', panel=2),
     ]
 
-    # Create markers for the buy/sell signals
     buy_signals = data.loc[data['Position'] == 1.0].index
     sell_signals = data.loc[data['Position'] == -1.0].index
     
@@ -170,17 +169,15 @@ def plot_results(data, ticker):
     markers = pd.concat([buy_markers, sell_markers]).sort_index()
     colors = ['g' if marker == '^' else 'r' for marker in markers]
     
-    # Add scatter plots for the signals
     apds.append(mpf.make_addplot(data.loc[markers.index, '20-Day SMA'], type='scatter', markersize=100, marker=markers.values, color=colors, panel=0))
 
-    # Plotting using mplfinance
     style = mpf.make_mpf_style(base_mpl_style='dark_background', marketcolors=mpf.make_marketcolors(up='g', down='r'))
     
     mpf.plot(data, type='candle', addplot=apds, style=style,
              title=f'Technical Analysis for {ticker}', ylabel='Price (USD)',
              volume=True, panel_ratios=(4, 1, 1, 1), savefig=f"{ticker}_analysis_candlestick.png")
 
-    # Now, plot the performance chart separately using matplotlib
+    # Plot the performance chart separately using matplotlib
     fig, ax = plt.subplots(figsize=(14, 8))
     ax.plot(data['Cumulative Strategy Returns'], label='Strategy Performance', color='green', linewidth=2)
     ax.plot(data['Cumulative Buy and Hold Returns'], label='Buy & Hold Performance', color='purple', linewidth=2, linestyle='--')
@@ -192,6 +189,8 @@ def plot_results(data, ticker):
     
     performance_filename = f"{ticker}_performance_chart.png"
     fig.savefig(performance_filename)
+    
+    # Displaying the plots
     print(f"Candlestick chart saved to '{ticker}_analysis_candlestick.png'")
     print(f"Performance chart saved to '{performance_filename}'")
     plt.show()
