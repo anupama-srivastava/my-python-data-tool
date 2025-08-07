@@ -74,8 +74,8 @@ def calculate_indicators(data):
 
 def backtest_strategy(data, log_widget):
     """
-    Backtests a sophisticated trading strategy with dynamic stop-loss, take-profit,
-    and detailed position management.
+    Backtests a simple trading strategy with portfolio management and transaction costs.
+    This version has been simplified to avoid the errors.
     """
     initial_cash = 100000
     portfolio = initial_cash
@@ -89,8 +89,8 @@ def backtest_strategy(data, log_widget):
     data = data.dropna().copy()
     
     log_widget.insert(tk.END, "Starting backtest...\n\n")
-
-    trade_log = []
+    
+    portfolio_history = []
     
     for i in range(len(data)):
         # Check for a BUY signal
@@ -98,79 +98,42 @@ def backtest_strategy(data, log_widget):
         
         # Check for a SELL signal
         sell_signal = (data['Position'].iloc[i] == -1.0)
-
-        # Check for stop-loss or take-profit
-        current_price = data['Close'].iloc[i]
-        is_stop_loss = in_position and current_price < entry_price * (1 - 0.05)
-        is_take_profit = in_position and current_price > entry_price * (1 + 0.10)
-
-        if buy_signal:
+        
+        # Execute buy
+        if buy_signal and not in_position:
             entry_price = data['Close'].iloc[i]
-            position_size = portfolio * 0.5  # Allocate 50% of portfolio
+            position_size = portfolio * 0.5
             shares_to_buy = int(position_size / entry_price)
             cost = shares_to_buy * entry_price
             transaction_cost = cost * transaction_cost_rate
             portfolio -= (cost + transaction_cost)
             in_position = True
             log_widget.insert(tk.END, f"BUY signal on {data.index[i].strftime('%Y-%m-%d')} at ${entry_price:.2f}\n")
-            trade_log.append({'date': data.index[i], 'action': 'BUY', 'price': entry_price, 'portfolio': portfolio})
-        
-        elif sell_signal or is_stop_loss or is_take_profit:
-            if in_position:
-                revenue = shares_to_buy * current_price
-                transaction_cost = revenue * transaction_cost_rate
-                portfolio += (revenue - transaction_cost)
-                in_position = False
-                
-                if is_stop_loss:
-                    log_widget.insert(tk.END, f"STOP-LOSS on {data.index[i].strftime('%Y-%m-%d')} at ${current_price:.2f}\n")
-                elif is_take_profit:
-                    log_widget.insert(tk.END, f"TAKE-PROFIT on {data.index[i].strftime('%Y-%m-%d')} at ${current_price:.2f}\n")
-                else:
-                    log_widget.insert(tk.END, f"SELL signal on {data.index[i].strftime('%Y-%m-%d')} at ${current_price:.2f}\n")
-                
-                trade_log.append({'date': data.index[i], 'action': 'SELL', 'price': current_price, 'portfolio': portfolio})
-
-    # --- Calculate Final Metrics ---
-    trade_df = pd.DataFrame(trade_log)
-    if not trade_df.empty:
-        trade_df.set_index('date', inplace=True)
-        
-        buy_hold_returns = (data['Close'].iloc[-1] / data['Close'].iloc[0]) - 1
-
-        final_portfolio_value = portfolio
-        total_strategy_return = (final_portfolio_value / initial_cash) - 1
-        
-        daily_returns = trade_df['portfolio'].pct_change().dropna()
-        if not daily_returns.empty:
-            sharpe_ratio = np.sqrt(252) * daily_returns.mean() / daily_returns.std()
             
-            cumulative_returns = (1 + daily_returns).cumprod()
-            peak = cumulative_returns.expanding(min_periods=1).max()
-            drawdown = (cumulative_returns - peak) / peak
-            max_drawdown = drawdown.min()
-        else:
-            sharpe_ratio = 0.0
-            max_drawdown = 0.0
+        # Execute sell
+        elif sell_signal and in_position:
+            current_price = data['Close'].iloc[i]
+            revenue = shares_to_buy * current_price
+            transaction_cost = revenue * transaction_cost_rate
+            portfolio += (revenue - transaction_cost)
+            in_position = False
+            log_widget.insert(tk.END, f"SELL signal on {data.index[i].strftime('%Y-%m-%d')} at ${current_price:.2f}\n")
+            
+        portfolio_history.append(portfolio)
 
-    else:
-        final_portfolio_value = initial_cash
-        total_strategy_return = 0.0
-        buy_hold_returns = (data['Close'].iloc[-1] / data['Close'].iloc[0]) - 1
-        sharpe_ratio = 0.0
-        max_drawdown = 0.0
+    # Calculate final performance metrics
+    data['Strategy Cumulative Returns'] = (pd.Series(portfolio_history, index=data.index) / initial_cash) - 1
+    data['Buy and Hold Cumulative Returns'] = (data['Close'] / data['Close'].iloc[0]) - 1
 
+    final_portfolio_value = portfolio
+    total_strategy_return = (final_portfolio_value / initial_cash) - 1
+    buy_hold_returns = (data['Close'].iloc[-1] / data['Close'].iloc[0]) - 1
+    
     performance_metrics = {
         'Final Portfolio Value': f"${final_portfolio_value:.2f}",
         'Total Strategy Return': f"{total_strategy_return * 100:.2f}%",
-        'Total Buy & Hold Return': f"{buy_hold_returns * 100:.2f}%",
-        'Annualized Sharpe Ratio': f"{sharpe_ratio:.2f}",
-        'Maximum Drawdown': f"{max_drawdown * 100:.2f}%"
+        'Total Buy & Hold Return': f"{buy_hold_returns * 100:.2f}%"
     }
-
-    # Recalculate cumulative returns for plotting
-    data['Strategy Cumulative Returns'] = (data['Close'] / data['Close'].iloc[0]) * (final_portfolio_value / initial_cash) - 1
-    data['Buy and Hold Cumulative Returns'] = (data['Close'] / data['Close'].iloc[0]) - 1
 
     return data, performance_metrics
 
