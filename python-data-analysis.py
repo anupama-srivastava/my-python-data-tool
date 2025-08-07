@@ -37,6 +37,9 @@ def run_analysis(ticker, start_date, end_date):
         return
 
     # --- Data Analysis: Technical Indicators ---
+    # Calculate daily returns first, as other sections depend on it.
+    stock_data['Daily Return'] = stock_data['Close'].pct_change()
+
     stock_data['20-Day SMA'] = stock_data['Close'].rolling(window=20).mean()
     stock_data['50-Day SMA'] = stock_data['Close'].rolling(window=50).mean()
 
@@ -87,7 +90,6 @@ def run_analysis(ticker, start_date, end_date):
     ax1.grid(True, linestyle='--', alpha=0.6)
 
     # --- Subplot 2: Daily Returns ---
-    stock_data['Daily Return'] = stock_data['Close'].pct_change()
     ax2.bar(stock_data.index, stock_data['Daily Return'], label='Daily Return', color='gray', alpha=0.6)
     ax2.set_title('Daily Returns', fontsize=16)
     ax2.set_ylabel('Return (%)', fontsize=12)
