@@ -63,6 +63,16 @@ def calculate_indicators(data):
     data['STD'] = data['Close'].rolling(window=20).std()
     data['Upper Band'] = data['20-Day SMA'] + (data['STD'] * 2)
     data['Lower Band'] = data['20-Day SMA'] - (data['STD'] * 2)
+
+    # --- Backtesting Strategy Signals (Moved to a separate section) ---
+    # This logic now runs after all indicators are calculated.
+    data['Signal'] = 0.0
+    data['Signal'] = (data['20-Day SMA'] > data['50-Day SMA']).astype(float)
+    data['Signal'][(data['RSI'] > 70)] = 0.0
+    data['Position'] = data['Signal'].diff()
+
+    data['Strategy Cumulative Returns'] = (data['Close'] / data['Close'].iloc[0]) * (1 + data['Daily Return'].where(data['Position'] == 1, 0)).cumprod() - 1
+    data['Buy and Hold Cumulative Returns'] = (data['Close'] / data['Close'].iloc[0]) - 1
     
     return data
 
@@ -70,14 +80,6 @@ def backtest_strategy(data, log_widget):
     """
     Backtests a sophisticated trading strategy with dynamic stop-loss, take-profit,
     and detailed position management.
-    
-    Strategy: Buy signal when 20-day SMA crosses above 50-day SMA and MACD crosses
-              above its signal line. Sell signal on the opposite cross.
-    
-    Includes:
-    - Transaction costs of 0.1% per trade.
-    - Dynamic stop-loss and take-profit levels.
-    - Portfolio management with an initial cash value.
     """
     initial_cash = 100000
     portfolio = initial_cash
@@ -92,15 +94,10 @@ def backtest_strategy(data, log_widget):
 
     for i in range(1, len(data)):
         # Check for a BUY signal
-        buy_signal = (data['20-Day SMA'].iloc[i] > data['50-Day SMA'].iloc[i] and 
-                      data['20-Day SMA'].iloc[i-1] <= data['50-Day SMA'].iloc[i-1] and
-                      data['MACD'].iloc[i] > data['MACD Signal'].iloc[i] and
-                      data['MACD'].iloc[i-1] <= data['MACD Signal'].iloc[i-1] and
-                      not in_position)
+        buy_signal = (data['Position'].iloc[i] == 1.0)
         
         # Check for a SELL signal
-        sell_signal = (in_position and (data['20-Day SMA'].iloc[i] < data['50-Day SMA'].iloc[i] or
-                       data['MACD'].iloc[i] < data['MACD Signal'].iloc[i]))
+        sell_signal = (data['Position'].iloc[i] == -1.0)
 
         # Check for stop-loss or take-profit
         current_price = data['Close'].iloc[i]
@@ -132,9 +129,6 @@ def backtest_strategy(data, log_widget):
                     log_widget.insert(tk.END, f"SELL signal on {data.index[i].strftime('%Y-%m-%d')} at ${current_price:.2f}\n")
 
     # Add final metrics to log
-    data['Strategy Cumulative Returns'] = (data['Close'] / data['Close'].iloc[0]) * (portfolio / initial_cash) - 1
-    data['Buy and Hold Cumulative Returns'] = (data['Close'] / data['Close'].iloc[0]) - 1
-
     strategy_returns = data['Strategy Cumulative Returns'].diff().dropna()
     buy_hold_returns = data['Buy and Hold Cumulative Returns'].diff().dropna()
 
@@ -202,8 +196,8 @@ def plot_results(data, ticker, plot_frame, file_path=None):
     ax4.legend()
 
     # --- Subplot 5: Strategy vs. Buy and Hold Performance ---
-    ax5.plot(data['Cumulative Strategy Returns'], label='Strategy Performance', color='lime', linewidth=2)
-    ax5.plot(data['Cumulative Buy and Hold Returns'], label='Buy & Hold Performance', color='magenta', linewidth=2, linestyle='--')
+    ax5.plot(data['Strategy Cumulative Returns'], label='Strategy Performance', color='lime', linewidth=2)
+    ax5.plot(data['Buy and Hold Cumulative Returns'], label='Buy & Hold Performance', color='magenta', linewidth=2, linestyle='--')
     ax5.set_title('Strategy Backtesting Performance', fontsize=16)
     ax5.set_xlabel('Date', fontsize=12)
     ax5.set_ylabel('Cumulative Return', fontsize=12)
