@@ -85,7 +85,9 @@ def backtest_strategy(data, log_widget):
     
     transaction_cost_rate = 0.001
 
+    # Drop rows with NaN values to ensure all indicators are calculated
     data = data.dropna()
+    
     log_widget.insert(tk.END, "Starting backtest...\n\n")
 
     trade_log = []
@@ -140,12 +142,17 @@ def backtest_strategy(data, log_widget):
         total_strategy_return = (final_portfolio_value / initial_cash) - 1
         
         daily_returns = trade_df['portfolio'].pct_change().dropna()
-        sharpe_ratio = np.sqrt(252) * daily_returns.mean() / daily_returns.std()
-        
-        cumulative_returns = (1 + daily_returns).cumprod()
-        peak = cumulative_returns.expanding(min_periods=1).max()
-        drawdown = (cumulative_returns - peak) / peak
-        max_drawdown = drawdown.min()
+        if not daily_returns.empty:
+            sharpe_ratio = np.sqrt(252) * daily_returns.mean() / daily_returns.std()
+            
+            cumulative_returns = (1 + daily_returns).cumprod()
+            peak = cumulative_returns.expanding(min_periods=1).max()
+            drawdown = (cumulative_returns - peak) / peak
+            max_drawdown = drawdown.min()
+        else:
+            sharpe_ratio = 0.0
+            max_drawdown = 0.0
+
     else:
         final_portfolio_value = initial_cash
         total_strategy_return = 0.0
