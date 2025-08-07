@@ -7,7 +7,7 @@
 # --- Prerequisites ---
 # Before running this script, you need to install the required libraries.
 # You can do this by running the following command in your terminal:
-# pip install yfinance pandas matplotlib numpy
+# pip install yfinance pandas matplotlib numpy mplfinance
 
 # --- Imports ---
 import yfinance as yf
@@ -15,6 +15,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import datetime
 import numpy as np
+import mplfinance as mpf
 
 def get_data(ticker, start_date, end_date):
     """
@@ -97,6 +98,24 @@ def backtest_strategy(data):
     # The `Position` column now directly indicates a change in our signal.
     data['Position'] = data['Signal'].diff()
 
+    # Provide conversational feedback for buy and sell signals.
+    buy_signals = data.loc[data['Position'] == 1.0]
+    sell_signals = data.loc[data['Position'] == -1.0]
+
+    if not buy_signals.empty:
+        print("\n--- Trading Signals ---")
+        for date, row in buy_signals.iterrows():
+            print(f"🟢 BUY Signal: The 20-day SMA crossed above the 50-day SMA on {date.strftime('%Y-%m-%d')}.")
+    else:
+        print("\n--- Trading Signals ---")
+        print("No BUY signals were generated in this period.")
+        
+    if not sell_signals.empty:
+        for date, row in sell_signals.iterrows():
+            print(f"🔴 SELL Signal: The 20-day SMA crossed below the 50-day SMA on {date.strftime('%Y-%m-%d')}.")
+    else:
+        print("No SELL signals were generated in this period.")
+
     # Calculate strategy returns based on our signals. This is a robust method.
     data['Strategy Returns'] = data['Daily Return'].shift(-1) * data['Position']
     data['Buy and Hold Returns'] = data['Daily Return'].shift(-1)
@@ -130,58 +149,51 @@ def plot_results(data, ticker):
     """
     Generates and saves a comprehensive multi-subplot visualization of the analysis.
     """
-    # Create a figure with four subplots.
-    fig, (ax1, ax2, ax3, ax4) = plt.subplots(nrows=4, ncols=1, figsize=(14, 20), sharex=True, gridspec_kw={'height_ratios': [3, 1, 1, 1]})
+    # Create `addplot` objects for the indicators to be added to the main chart
+    apds = [
+        mpf.make_addplot(data['20-Day SMA'], color='orange', panel=0),
+        mpf.make_addplot(data['50-Day SMA'], color='red', panel=0),
+        mpf.make_addplot(data['Upper Band'], color='gray', linestyle='--', panel=0),
+        mpf.make_addplot(data['Lower Band'], color='gray', linestyle='--', panel=0),
+        mpf.make_addplot(data['RSI'], color='purple', panel=1),
+        mpf.make_addplot(data['MACD'], color='blue', panel=2),
+        mpf.make_addplot(data['MACD Signal'], color='red', panel=2),
+    ]
 
-    # --- Subplot 1: Price, SMAs, Bollinger Bands, and Signals ---
-    ax1.plot(data['Close'], label='Closing Price', color='blue', linewidth=1.5)
-    ax1.plot(data['20-Day SMA'], label='20-Day SMA', color='orange', linestyle='--')
-    ax1.plot(data['50-Day SMA'], label='50-Day SMA', color='red', linestyle='--')
-    ax1.fill_between(data.index, data['Upper Band'], data['Lower Band'], color='gray', alpha=0.2, label='Bollinger Bands')
-    
-    # Plot the buy and sell signals.
+    # Create markers for the buy/sell signals
     buy_signals = data.loc[data['Position'] == 1.0].index
-    ax1.plot(buy_signals, data['20-Day SMA'][buy_signals], '^', markersize=10, color='g', label='Buy Signal')
     sell_signals = data.loc[data['Position'] == -1.0].index
-    ax1.plot(sell_signals, data['20-Day SMA'][sell_signals], 'v', markersize=10, color='r', label='Sell Signal')
-
-    ax1.set_title(f'Stock Price & Strategy Signals for {ticker}', fontsize=16)
-    ax1.set_ylabel('Price (USD)', fontsize=12)
-    ax1.legend()
-    ax1.grid(True, linestyle='--', alpha=0.6)
-
-    # --- Subplot 2: Relative Strength Index (RSI) ---
-    ax2.plot(data['RSI'], label='RSI', color='purple', linewidth=1.5)
-    ax2.axhline(70, linestyle='--', alpha=0.5, color='red', label='Overbought')
-    ax2.axhline(30, linestyle='--', alpha=0.5, color='green', label='Oversold')
-    ax2.set_title('Relative Strength Index (RSI)', fontsize=16)
-    ax2.set_ylabel('RSI Value', fontsize=12)
-    ax2.grid(True, linestyle='--', alpha=0.6)
-    ax2.legend()
     
-    # --- Subplot 3: MACD Indicator ---
-    ax3.plot(data['MACD'], label='MACD', color='blue', linewidth=1.5)
-    ax3.plot(data['MACD Signal'], label='MACD Signal', color='red', linestyle='--')
-    ax3.axhline(0, linestyle='--', alpha=0.5, color='gray')
-    ax3.set_title('MACD Indicator', fontsize=16)
-    ax3.set_ylabel('Value', fontsize=12)
-    ax3.grid(True, linestyle='--', alpha=0.6)
-    ax3.legend()
-    
-    # --- Subplot 4: Strategy vs. Buy and Hold Performance ---
-    ax4.plot(data['Cumulative Strategy Returns'], label='Strategy Performance', color='green', linewidth=2)
-    ax4.plot(data['Cumulative Buy and Hold Returns'], label='Buy & Hold Performance', color='purple', linewidth=2, linestyle='--')
-    ax4.set_title('Strategy Backtesting Performance', fontsize=16)
-    ax4.set_xlabel('Date', fontsize=12)
-    ax4.set_ylabel('Cumulative Return', fontsize=12)
-    ax4.legend()
-    ax4.grid(True, linestyle='--', alpha=0.6)
+    buy_markers = pd.Series('^', index=buy_signals)
+    sell_markers = pd.Series('v', index=sell_signals)
 
-    # Improve layout and save the plot.
-    plt.tight_layout()
-    plot_filename = f"{ticker}_advanced_analysis.png"
-    plt.savefig(plot_filename)
-    print(f"\nPlot saved to '{plot_filename}'")
+    markers = pd.concat([buy_markers, sell_markers]).sort_index()
+    colors = ['g' if marker == '^' else 'r' for marker in markers]
+    
+    # Add scatter plots for the signals
+    apds.append(mpf.make_addplot(data.loc[markers.index, '20-Day SMA'], type='scatter', markersize=100, marker=markers.values, color=colors, panel=0))
+
+    # Plotting using mplfinance
+    style = mpf.make_mpf_style(base_mpl_style='dark_background', marketcolors=mpf.make_marketcolors(up='g', down='r'))
+    
+    mpf.plot(data, type='candle', addplot=apds, style=style,
+             title=f'Technical Analysis for {ticker}', ylabel='Price (USD)',
+             volume=True, panel_ratios=(4, 1, 1, 1), savefig=f"{ticker}_analysis_candlestick.png")
+
+    # Now, plot the performance chart separately using matplotlib
+    fig, ax = plt.subplots(figsize=(14, 8))
+    ax.plot(data['Cumulative Strategy Returns'], label='Strategy Performance', color='green', linewidth=2)
+    ax.plot(data['Cumulative Buy and Hold Returns'], label='Buy & Hold Performance', color='purple', linewidth=2, linestyle='--')
+    ax.set_title(f'Strategy Backtesting Performance (Cumulative Returns) for {ticker}', fontsize=16)
+    ax.set_xlabel('Date', fontsize=12)
+    ax.set_ylabel('Cumulative Return', fontsize=12)
+    ax.legend()
+    ax.grid(True, linestyle='--', alpha=0.6)
+    
+    performance_filename = f"{ticker}_performance_chart.png"
+    fig.savefig(performance_filename)
+    print(f"Candlestick chart saved to '{ticker}_analysis_candlestick.png'")
+    print(f"Performance chart saved to '{performance_filename}'")
     plt.show()
 
 if __name__ == '__main__':
