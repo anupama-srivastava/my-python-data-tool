@@ -86,7 +86,7 @@ def backtest_strategy(data, log_widget):
     transaction_cost_rate = 0.001
 
     # Drop rows with NaN values to ensure all indicators are calculated
-    data = data.dropna()
+    data = data.dropna().copy()
     
     log_widget.insert(tk.END, "Starting backtest...\n\n")
 
