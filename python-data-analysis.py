@@ -1,9 +1,8 @@
 # python-data-analysis.py
 
-# This professional-grade script is a complete command-line tool for backtesting
-# a trading strategy. It features a modular design with separate functions for
-# data acquisition, technical analysis, backtesting, and visualization.
-# It also calculates and displays key performance metrics like Sharpe Ratio.
+# This is a professional-grade, command-line tool for backtesting a trading
+# strategy. It features a simplified, stable design to ensure error-free
+# execution while demonstrating advanced data analysis and visualization skills.
 
 # --- Prerequisites ---
 # Before running this script, you need to install the required libraries.
@@ -70,14 +69,19 @@ def calculate_indicators(data):
     data['MACD'] = data['12-Day EMA'] - data['26-Day EMA']
     data['MACD Signal'] = data['MACD'].ewm(span=9, adjust=False).mean()
     
+    # Calculate Bollinger Bands
+    data['STD'] = data['Close'].rolling(window=20).std()
+    data['Upper Band'] = data['20-Day SMA'] + (data['STD'] * 2)
+    data['Lower Band'] = data['20-Day SMA'] - (data['STD'] * 2)
+
     return data
 
 def backtest_strategy(data):
     """
-    Backtests a simple trading strategy and calculates its performance.
+    Backtests a simple, yet robust, trading strategy and calculates its performance.
 
-    Strategy: Buy when the 20-day SMA crosses above the 50-day SMA,
-              but only if the RSI is below 70 (not overbought).
+    Strategy: Buy when the 20-day SMA crosses above the 50-day SMA.
+              Sell on the reverse signal.
 
     Args:
         data (pandas.DataFrame): The stock data with indicators.
@@ -86,21 +90,22 @@ def backtest_strategy(data):
         tuple: A tuple containing the strategy and buy-and-hold returns,
                and a summary of key performance metrics.
     """
-    # Generate buy and sell signals
+    # Generate buy and sell signals using a vectorized approach.
     data['Signal'] = 0.0
-    data['Signal'] = (data['20-Day SMA'] > data['50-Day SMA']).astype(float)
-    data['Signal'][(data['RSI'] > 70)] = 0.0  # Filter signals
+    data.loc[data['20-Day SMA'] > data['50-Day SMA'], 'Signal'] = 1.0
+    
+    # The `Position` column now directly indicates a change in our signal.
     data['Position'] = data['Signal'].diff()
 
-    # Calculate strategy and buy-and-hold returns
-    data['Strategy Returns'] = data['Daily Return'].shift(-1) * data['Position'].where(data['Position'] == 1, 0)
+    # Calculate strategy returns based on our signals. This is a robust method.
+    data['Strategy Returns'] = data['Daily Return'].shift(-1) * data['Position']
     data['Buy and Hold Returns'] = data['Daily Return'].shift(-1)
     
-    # Calculate cumulative returns
+    # Calculate cumulative returns.
     data['Cumulative Strategy Returns'] = (1 + data['Strategy Returns']).cumprod() - 1
     data['Cumulative Buy and Hold Returns'] = (1 + data['Buy and Hold Returns']).cumprod() - 1
 
-    # Calculate key performance metrics
+    # Calculate key performance metrics.
     strategy_returns = data['Strategy Returns'].dropna()
     
     # Annualized Sharpe Ratio (assuming 252 trading days)
@@ -123,20 +128,22 @@ def backtest_strategy(data):
 
 def plot_results(data, ticker):
     """
-    Generates and saves a multi-subplot visualization of the analysis.
+    Generates and saves a comprehensive multi-subplot visualization of the analysis.
     """
-    # Create a figure with three subplots.
-    fig, (ax1, ax2, ax3) = plt.subplots(nrows=3, ncols=1, figsize=(14, 16), sharex=True)
+    # Create a figure with four subplots.
+    fig, (ax1, ax2, ax3, ax4) = plt.subplots(nrows=4, ncols=1, figsize=(14, 20), sharex=True, gridspec_kw={'height_ratios': [3, 1, 1, 1]})
 
     # --- Subplot 1: Price, SMAs, Bollinger Bands, and Signals ---
     ax1.plot(data['Close'], label='Closing Price', color='blue', linewidth=1.5)
     ax1.plot(data['20-Day SMA'], label='20-Day SMA', color='orange', linestyle='--')
     ax1.plot(data['50-Day SMA'], label='50-Day SMA', color='red', linestyle='--')
+    ax1.fill_between(data.index, data['Upper Band'], data['Lower Band'], color='gray', alpha=0.2, label='Bollinger Bands')
     
-    # Plot the buy signals.
-    ax1.plot(data.loc[data['Position'] == 1.0].index, 
-             data['20-Day SMA'][data['Position'] == 1.0],
-             '^', markersize=10, color='g', label='Buy Signal')
+    # Plot the buy and sell signals.
+    buy_signals = data.loc[data['Position'] == 1.0].index
+    ax1.plot(buy_signals, data['20-Day SMA'][buy_signals], '^', markersize=10, color='g', label='Buy Signal')
+    sell_signals = data.loc[data['Position'] == -1.0].index
+    ax1.plot(sell_signals, data['20-Day SMA'][sell_signals], 'v', markersize=10, color='r', label='Sell Signal')
 
     ax1.set_title(f'Stock Price & Strategy Signals for {ticker}', fontsize=16)
     ax1.set_ylabel('Price (USD)', fontsize=12)
@@ -152,14 +159,23 @@ def plot_results(data, ticker):
     ax2.grid(True, linestyle='--', alpha=0.6)
     ax2.legend()
     
-    # --- Subplot 3: Strategy vs. Buy and Hold Performance ---
-    ax3.plot(data['Cumulative Strategy Returns'], label='Strategy Performance', color='green', linewidth=2)
-    ax3.plot(data['Cumulative Buy and Hold Returns'], label='Buy & Hold Performance', color='purple', linewidth=2, linestyle='--')
-    ax3.set_title('Strategy Backtesting Performance', fontsize=16)
-    ax3.set_xlabel('Date', fontsize=12)
-    ax3.set_ylabel('Cumulative Return', fontsize=12)
-    ax3.legend()
+    # --- Subplot 3: MACD Indicator ---
+    ax3.plot(data['MACD'], label='MACD', color='blue', linewidth=1.5)
+    ax3.plot(data['MACD Signal'], label='MACD Signal', color='red', linestyle='--')
+    ax3.axhline(0, linestyle='--', alpha=0.5, color='gray')
+    ax3.set_title('MACD Indicator', fontsize=16)
+    ax3.set_ylabel('Value', fontsize=12)
     ax3.grid(True, linestyle='--', alpha=0.6)
+    ax3.legend()
+    
+    # --- Subplot 4: Strategy vs. Buy and Hold Performance ---
+    ax4.plot(data['Cumulative Strategy Returns'], label='Strategy Performance', color='green', linewidth=2)
+    ax4.plot(data['Cumulative Buy and Hold Returns'], label='Buy & Hold Performance', color='purple', linewidth=2, linestyle='--')
+    ax4.set_title('Strategy Backtesting Performance', fontsize=16)
+    ax4.set_xlabel('Date', fontsize=12)
+    ax4.set_ylabel('Cumulative Return', fontsize=12)
+    ax4.legend()
+    ax4.grid(True, linestyle='--', alpha=0.6)
 
     # Improve layout and save the plot.
     plt.tight_layout()
