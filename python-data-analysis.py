@@ -66,8 +66,8 @@ def calculate_indicators(data):
 
     # Generate signals for backtesting
     data['Signal'] = 0.0
-    data['Signal'] = (data['20-Day SMA'] > data['50-Day SMA']).astype(float)
-    data['Signal'][(data['RSI'] > 70)] = 0.0
+    data.loc[data['20-Day SMA'] > data['50-Day SMA'], 'Signal'] = 1.0
+    data.loc[data['RSI'] > 70, 'Signal'] = 0.0
     data['Position'] = data['Signal'].diff()
 
     return data
@@ -88,8 +88,6 @@ def backtest_strategy(data, log_widget):
     data = data.dropna()
     log_widget.insert(tk.END, "Starting backtest...\n\n")
 
-    # To avoid the KeyError, we iterate through the DataFrame after dropping NaNs
-    # to ensure all necessary columns are populated.
     trade_log = []
     
     for i in range(len(data)):
@@ -132,32 +130,26 @@ def backtest_strategy(data, log_widget):
                 trade_log.append({'date': data.index[i], 'action': 'SELL', 'price': current_price, 'portfolio': portfolio})
 
     # --- Calculate Final Metrics ---
-    # Create a DataFrame from the trade log for calculating returns
     trade_df = pd.DataFrame(trade_log)
     if not trade_df.empty:
         trade_df.set_index('date', inplace=True)
-        trade_df['Portfolio Value'] = trade_df['portfolio']
         
-        # Calculate Buy and Hold returns on the original dataset
-        buy_hold_returns = (data['Close'].iloc[-1] - data['Close'].iloc[0]) / data['Close'].iloc[0]
+        buy_hold_returns = (data['Close'].iloc[-1] / data['Close'].iloc[0]) - 1
 
-        # Calculate strategy cumulative returns
-        data['Strategy Cumulative Returns'] = (data['Close'] / data['Close'].iloc[0])
-        # This part of the cumulative returns calculation is complex and prone to errors.
-        # It's better to rely on the final portfolio value from the backtest loop.
-        
-        # Calculate performance metrics based on the trade log
         final_portfolio_value = portfolio
         total_strategy_return = (final_portfolio_value / initial_cash) - 1
         
-        # Calculate Sharpe Ratio and Drawdown (simplified for clarity)
-        # This requires more complex logic that is outside the scope of this fix
-        sharpe_ratio = 0.0 # Placeholder
-        max_drawdown = 0.0 # Placeholder
+        daily_returns = trade_df['portfolio'].pct_change().dropna()
+        sharpe_ratio = np.sqrt(252) * daily_returns.mean() / daily_returns.std()
+        
+        cumulative_returns = (1 + daily_returns).cumprod()
+        peak = cumulative_returns.expanding(min_periods=1).max()
+        drawdown = (cumulative_returns - peak) / peak
+        max_drawdown = drawdown.min()
     else:
         final_portfolio_value = initial_cash
         total_strategy_return = 0.0
-        buy_hold_returns = (data['Close'].iloc[-1] - data['Close'].iloc[0]) / data['Close'].iloc[0]
+        buy_hold_returns = (data['Close'].iloc[-1] / data['Close'].iloc[0]) - 1
         sharpe_ratio = 0.0
         max_drawdown = 0.0
 
