@@ -1,0 +1,50 @@
+# Core Data Analysis
+pandas
+numpy
+yfinance
+
+# Advanced Visualization
+matplotlib
+seaborn
+plotly
+mplfinance
+bokeh
+
+# Technical Analysis
+ta-lib
+ta
+
+# Machine Learning
+scikit-learn
+xgboost
+
+# Statistical Analysis
+scipy
+statsmodels
+
+# Data Storage & Processing
+sqlalchemy
+h5py
+
+# Web Framework for Dashboard
+dash
+dash-bootstrap-components
+flask
+
+# Interactive Features
+colorama
+tabulate
+rich
+
+# Utilities
+python-dotenv
+pyyaml
+tqdm
+
+# Testing
+pytest
+pytest-cov
+
+# Documentation
+sphinx
+sphinx-rtd-theme
